@@ -292,16 +292,12 @@ function ImportDevice {
 
 ## MAIN PROCESS ##
 
-ShowInfo
-
+$ErrorActionPreference = 'Inquire'
 $Global:TempFolder = 'C:\Windows\Temp\TurboPilot'
 
-#LoadModules 
-
+ShowInfo
+LoadModules
 ConnectGraph
-
 ImportDevice -Options (ProfileGUI)
-
 Disconnect-MgGraph -ErrorAction Ignore | Out-Null
-
-Remove-Item -Path $TempFolder -Force -Recurse -ErrorAction 'SilentlyContinue' | Out-Null
+Remove-Item -Path $TempFolder -Force -Recurse | Out-Null
