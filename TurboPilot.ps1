@@ -11,7 +11,6 @@ function LoadModules {
     Write-HostCenter 'Loading Modules'
 
     New-Item -ItemType Directory $TempFolder -Force | Out-Null
-    Remove-Item -Path "$TempFolder/*" -Recurse -Force | Out-Null
 
     $Links = @(
         "https://psg-prod-eastus.azureedge.net/packages/microsoft.graph.authentication.2.26.1.nupkg"
@@ -20,23 +19,28 @@ function LoadModules {
         "https://psg-prod-eastus.azureedge.net/packages/microsoft.graph.intune.6.1907.1.nupkg"
         "https://psg-prod-eastus.azureedge.net/packages/windowsautopilotintune.5.7.0.nupkg"
     )
-
-    ## Extract and load downloaded modules
-    foreach ($Link in $Links) {
-        try {
-            $Module = $Link.split('/').trim('.nupkg') | Select-Object -Last 1
+    $ModulesRequired = $Links | ForEach-Object { $_.split('/').trim('.nupkg') | Select-Object -Last 1 }
+    $ModulesPresent = Get-ChildItem $TempFolder | Where-Object { Get-ChildItem $_.FullName -Filter '*.psd1' } | Select-Object -ExpandProperty Name
+    if (!($ModulesPresent)) { $ModulesPresent = @() }
+    if ($ModulesRequired -notlike $ModulesPresent) {
+        Compare-Object $ModulesPresent $ModulesRequired -IncludeEqual | Sort-Object -Property InputObject | ForEach-Object {
+            if ($_.SideIndicator -eq '<=') { continue }
+            $Module = $_.InputObject
             $Path = "$TempFolder\$Module.zip"
+            $Folder = $Path.Replace('.zip','')
             Write-Host -NoNewLine "Loading module: $Module"
-            Invoke-WebRequest -Uri $Link -OutFile $Path
-            Write-Host ' | ' -F White -NoNewline; Write-Host 'Downloaded!' -NoNewline -F White
-            $Folder = New-Item -ItemType Directory $Path.Replace('.zip','')
-            Expand-Archive -Path $Path -DestinationPath $Folder -Force
-            Write-Host ' | ' -F White -NoNewline; Write-Host 'Extracted!' -NoNewline -F Yellow
-            Start-Sleep 2
+            if ($_.SideIndicator -eq '=>') {
+                $Link = $Links | Where-Object { $_ -like "*$Module*" }
+                Invoke-WebRequest -Uri $Link -OutFile $Path
+                Write-Host ' | ' -F White -NoNewline; Write-Host 'Downloaded' -NoNewline -F White
+                New-Item -ItemType Directory $Folder -Force | Out-Null
+                Expand-Archive -Path $Path -DestinationPath $Folder -Force
+                Remove-Item -Path $Path -Force
+                Write-Host ' | ' -F White -NoNewline; Write-Host 'Extracted' -NoNewline -F Yellow
+            }
             Import-Module (Get-ChildItem $Folder -Filter '*.psd1' | Select-Object -ExpandProperty FullName)
-            Write-Host ' | ' -F White -NoNewline; Write-Host 'Imported!' -F Green
-            Start-Sleep 2
-        } catch { Write-Error "Failed to install module: $Module" }
+            Write-Host ' | ' -F White -NoNewline; Write-Host 'Imported' -F Green
+        }
     }
 }
 
@@ -81,7 +85,7 @@ function ProfileGUI {
     Write-Host "Loaded WinForms."
 
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'TurboPilot - Autopilot V1'
+    $form.Text = 'TurboPilot'
     $form.Size = New-Object System.Drawing.Size(200,250)
     $form.StartPosition = 'CenterScreen'
     $Form.FormBorderStyle = 'Fixed3D'
@@ -158,10 +162,7 @@ function ProfileGUI {
     # Pre-fill the input box with the current assigned user if available
     $serial = (Get-ComputerInfo -Property BiosSeralNumber | Select-Object -ExpandProperty BiosSeralNumber)
     $CurrentUser = (Get-AutopilotDevice -serial $serial).userPrincipalName
-    if ($CurrentUser) {
-        $UserInput.Text = $CurrentUser
-        Write-Host "Pre-filled assigned user: $CurrentUser"
-    }
+    if ($CurrentUser) { $UserInput.Text = $CurrentUser }
 
     $form.Controls.Add($UserInput)
 
@@ -300,4 +301,3 @@ LoadModules
 ConnectGraph
 ImportDevice -Options (ProfileGUI)
 Disconnect-MgGraph -ErrorAction Ignore | Out-Null
-Remove-Item -Path $TempFolder -Force -Recurse | Out-Null
