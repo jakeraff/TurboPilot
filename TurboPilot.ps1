@@ -66,7 +66,7 @@ function ConnectGraph {
         Connect-MgGraph -TenantId $tenantId -ClientSecretCredential $ClientSecretCredential
     } else {
         ## Connect interactively
-        Connect-MgGraph -UseDeviceCode -Scopes $Scopes
+        Connect-MgGraph -Scopes $Scopes
     }
 }
 
