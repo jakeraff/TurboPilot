@@ -12,6 +12,7 @@ function LoadModules {
 
     New-Item -ItemType Directory $TempFolder -Force | Out-Null
 
+    ## Download and extract required modules
     $Links = @(
         "https://psg-prod-eastus.azureedge.net/packages/microsoft.graph.authentication.2.26.1.nupkg"
         "https://psg-prod-eastus.azureedge.net/packages/microsoft.graph.users.2.26.1.nupkg"
@@ -21,6 +22,8 @@ function LoadModules {
     )
     $ModulesRequired = $Links | ForEach-Object { $_.split('/').trim('.nupkg') | Select-Object -Last 1 }
     $ModulesPresent = Get-ChildItem $TempFolder | Where-Object { Get-ChildItem $_.FullName -Filter '*.psd1' } | Select-Object -ExpandProperty Name
+
+    ## Check if modules are already present by comparing the arrays
     if (!($ModulesPresent)) { $ModulesPresent = @() }
     if ($ModulesRequired -notlike $ModulesPresent) {
         Compare-Object $ModulesPresent $ModulesRequired -IncludeEqual | Sort-Object -Property InputObject | ForEach-Object {
@@ -208,7 +211,8 @@ function ImportDevice {
 
     ## Find GroupTag
     $serial = (Get-ComputerInfo -Property BiosSeralNumber | Select-Object -ExpandProperty BiosSeralNumber)
-    $Device = Get-AutopilotDevice -id (Get-AutopilotDevice -serial $serial).id -expand
+    $deviceId = (Get-AutopilotDevice -serial $serial).id
+    if ($deviceId) { $Device = Get-AutopilotDevice -id $deviceId -expand }
 
     $OldOptions = [PSCustomObject]@{
         Profile = $Device.deploymentProfile.DisplayName
@@ -229,6 +233,7 @@ function ImportDevice {
 
     ## Import into Autopilot
     if (!($Device)) {
+        # Flow for new devices
         Write-Host "Importing device with serial '$serial' with GroupTag '$GroupTag'..."
         $hash = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -Class MDM_DevDetail_Ext01 -Filter "InstanceID='Ext' AND ParentID='./DevDetail'"
 
@@ -252,6 +257,7 @@ function ImportDevice {
         if ($Options.Name) { Set-AutopilotDevice -id (Get-AutopilotDevice -serial $serial).id -computerName $Options.Name }
         Write-Host "Device with serial '$serial' imported successfully! Waiting for details to update..."
     } elseif ($Options -notlike $OldOptions) {
+        # Flow for existing devices with new details
         Write-Host "Device with serial '$serial' already imported! Updating attributes instead..."
         $apArgs = @{
             id = $Device.id
@@ -262,6 +268,7 @@ function ImportDevice {
 
         Set-AutopilotDevice @apArgs
     } else { 
+        # Flow for existing devices with same details
         Write-Host "Device with serial '$serial' already imported with specified attributes!" -F Green
         return
     }
