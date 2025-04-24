@@ -156,8 +156,8 @@ function ProfileGUI {
 
     # Get Users
     $Users = Get-MgUser -Filter "accountEnabled eq true" -Property UserPrincipalName -All | Select-Object UserPrincipalName
-    $UserInput.AutoCompleteSource = 'CustomSource' 
-    $UserInput.AutoCompleteMode = 'SuggestAppend'
+    $UserInput.AutoCompleteSource = 'CustomSource'
+    $UserInput.AutoCompleteMode = 'Suggest'
     $AutoComplete = New-Object System.Windows.Forms.AutoCompleteStringCollection
     $UserInput.AutoCompleteCustomSource = $AutoComplete
     $AutoComplete.AddRange($Users.UserPrincipalName)
@@ -185,6 +185,7 @@ function ProfileGUI {
     $NameInput.Location = New-Object System.Drawing.Point(20,120)
     $NameInput.width = 142
     $NameInput.Anchor = 'top'
+    $NameInput.MaxLength = 15
     $form.Controls.Add($NameInput)
 
     $result = $form.ShowDialog()
@@ -308,3 +309,4 @@ LoadModules
 ConnectGraph
 ImportDevice -Options (ProfileGUI)
 Disconnect-MgGraph -ErrorAction Ignore | Out-Null
+Start-Sleep -Seconds 5
