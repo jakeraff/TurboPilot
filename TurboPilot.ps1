@@ -89,7 +89,7 @@ function ProfileGUI {
 
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'TurboPilot'
-    $form.Size = New-Object System.Drawing.Size(200,250)
+    $form.Size = New-Object System.Drawing.Size(200,240)
     $form.StartPosition = 'CenterScreen'
     $Form.FormBorderStyle = 'Fixed3D'
     $Form.ControlBox = $false
@@ -100,7 +100,7 @@ function ProfileGUI {
 
     $okButton = New-Object System.Windows.Forms.Button
     $okButton.Size = New-Object System.Drawing.Size(50,25)
-    $okButton.Location = New-Object System.Drawing.Point(20, ($form.ClientSize.Height - 50)) # Position near the bottom
+    $okButton.Location = New-Object System.Drawing.Point(20, ($form.ClientSize.Height - 40))
     $okButton.Anchor = 'Bottom'
     $okButton.Text = 'OK'
     $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
@@ -109,19 +109,19 @@ function ProfileGUI {
 
     Write-Host "Added OK button."
 
-    $label = New-Object System.Windows.Forms.Label
-    $label.Location = New-Object System.Drawing.Point(22,0)
-    $label.Size = New-Object System.Drawing.Size(280,20)
-    $label.Text = "Deployment profile:"
-    $label.Anchor = 'top'
-    $form.Controls.Add($label)
+    $ProfileLabel = New-Object System.Windows.Forms.Label
+    $ProfileLabel.Location = New-Object System.Drawing.Point(22,0)
+    $ProfileLabel.Size = New-Object System.Drawing.Size(($form.ClientSize.Width-$ProfileLabel.Location.X * 2),20)
+    $ProfileLabel.Text = "Deployment profile:"
+    $ProfileLabel.Anchor = 'top'
+    $form.Controls.Add($ProfileLabel)
 
     Write-Host "Added profile list label."
 
     $ProfileList = New-Object system.Windows.Forms.ComboBox
     $ProfileList.text = ""
-    $ProfileList.Location = New-Object System.Drawing.Point(20,20)
-    $ProfileList.width = 142
+    $ProfileList.Location = New-Object System.Drawing.Point(20,($ProfileLabel.Location.Y+20))
+    $ProfileList.width = $form.ClientSize.Width-$ProfileList.Location.X*2
     $ProfileList.Anchor = 'top'
 
     ## Gets list of all AP profiles and adds them to the drop down
@@ -140,18 +140,25 @@ function ProfileGUI {
     Write-Host "Added deployment profile field."
 
     $UserLabel = New-Object System.Windows.Forms.Label
-    $UserLabel.Location = New-Object System.Drawing.Point(22,50)
-    $UserLabel.Size = New-Object System.Drawing.Size(280,20)
+    $UserLabel.Location = New-Object System.Drawing.Point(22,($ProfileList.Location.Y+30))
+    $UserLabel.Size = New-Object System.Drawing.Size(($form.ClientSize.Width-$UserLabel.Location.X*2),20)
     $UserLabel.Text = "Assigned User:"
     $UserLabel.Anchor = 'top'
     $form.Controls.Add($UserLabel)
 
     Write-Host "Added assigned user label."
 
+    $UserClear = New-Object System.Windows.Forms.Button
+    $UserClear.Size = New-Object System.Drawing.Size(16,16)
+    $UserClear.Location = New-Object System.Drawing.Point(($form.ClientSize.Width-$UserLabel.Location.X*2+4), ($UserLabel.Location.Y+23))
+    $UserClear.Text = 'X'
+    $UserClear.Add_Click({ $UserInput.Clear() })
+    $form.Controls.Add($UserClear)
+
     $UserInput = New-Object System.Windows.Forms.TextBox
     $UserInput.text = ""
-    $UserInput.Location = New-Object System.Drawing.Point(20,70)
-    $UserInput.Width = 142
+    $UserInput.Location = New-Object System.Drawing.Point(20,($UserLabel.Location.Y+20))
+    $UserInput.Width = $form.ClientSize.Width-$UserInput.Location.X*2
     $UserInput.Anchor = 'top'
 
     # Get Users
@@ -167,23 +174,42 @@ function ProfileGUI {
     $CurrentUser = (Get-AutopilotDevice -serial $serial).userPrincipalName
     if ($CurrentUser) { $UserInput.Text = $CurrentUser }
 
+    # Clear the input box if the user inputs an invalid UPN
+    $UserInput.Add_LostFocus({
+        if ($Users.UserPrincipalName -notcontains $UserInput.Text) {
+            $UserInput.Clear()
+        }
+        else {
+            $UserInput.SelectionStart = 0
+            $UserInput.SelectionLength = 0
+            $UserInput.ScrollToCaret()
+        }
+    })
+
     $form.Controls.Add($UserInput)
 
     Write-Host "Added assigned user field."
 
     $NameLabel = New-Object System.Windows.Forms.Label
-    $NameLabel.Location = New-Object System.Drawing.Point(22,100)
-    $NameLabel.Size = New-Object System.Drawing.Size(280,20)
+    $NameLabel.Location = New-Object System.Drawing.Point(22,($UserInput.Location.Y+30))
+    $NameLabel.Size = New-Object System.Drawing.Size(($form.ClientSize.Width-$NameLabel.Location.X*2),20)
     $NameLabel.Text = "Computer Name:"
     $NameLabel.Anchor = 'top'
     $form.Controls.Add($NameLabel)
 
     Write-Host "Added computer name label."
 
+    $NameClear = New-Object System.Windows.Forms.Button
+    $NameClear.Size = New-Object System.Drawing.Size(16,16)
+    $NameClear.Location = New-Object System.Drawing.Point(($form.ClientSize.Width-$NameLabel.Location.X*2+4), ($NameLabel.Location.Y+23))
+    $NameClear.Text = 'X'
+    $NameClear.Add_Click({ $NameInput.Clear() })
+    $form.Controls.Add($NameClear)
+
     $NameInput = New-Object System.Windows.Forms.TextBox
     $NameInput.text = (hostname)
-    $NameInput.Location = New-Object System.Drawing.Point(20,120)
-    $NameInput.width = 142
+    $NameInput.Location = New-Object System.Drawing.Point(20,($NameLabel.Location.Y+20))
+    $NameInput.width = $form.ClientSize.Width-$NameInput.Location.X*2
     $NameInput.Anchor = 'top'
     $NameInput.MaxLength = 15
     $form.Controls.Add($NameInput)
@@ -196,16 +222,17 @@ function ProfileGUI {
         Exit 0
     }
 
-    return [PSCustomObject]@{
-        Profile = $ProfileList.SelectedItem
-        User = $UserInput.Text
-        Name = $NameInput.Text
-    }
+
+    $Options = @{ Profile = $ProfileList.SelectedItem }
+    if (!([String]::IsNullOrWhiteSpace($UserInput.Text))) { $Options['User'] = $UserInput.Text }
+    if (!([String]::IsNullOrWhiteSpace($NameInput.Text))) { $Options['Name'] = $NameInput.Text }
+
+    return $Options
 }
 
 function ImportDevice {
     param (
-        [PSCustomObject]$Options
+        $Options
     )
 
     Write-HostCenter 'Processing AutoPilot Request'
@@ -215,11 +242,9 @@ function ImportDevice {
     $deviceId = (Get-AutopilotDevice -serial $serial).id
     if ($deviceId) { $Device = Get-AutopilotDevice -id $deviceId -expand }
 
-    $OldOptions = [PSCustomObject]@{
-        Profile = $Device.deploymentProfile.DisplayName
-        User = $Device.userPrincipalName
-        Name = $Device.displayName
-    }
+    $OldOptions = @{ Profile = $Device.deploymentProfile.DisplayName }
+    if ($Options.User) { $OldOptions['User'] = $Device.userPrincipalName }
+    if ($Options.Name) { $OldOptions['Name'] = $Device.displayName }
 
     $SelectedProfile = Get-AutopilotProfile | Where-Object displayName -like $($Options.Profile)
     $SelectedGroup = Get-AutopilotProfileAssignments -id $SelectedProfile.id
@@ -227,7 +252,7 @@ function ImportDevice {
 
     while (!($GroupTag)) {
         $GroupTag = [Microsoft.VisualBasic.Interaction]::InputBox(
-            "No GroupTag found! Please manually input one", #Description
+            "No GroupTag found! Please manually set one", #Description
             "TurboPilot" #Title
         )
     }
@@ -281,11 +306,9 @@ function ImportDevice {
     while ($true) {
         $Device = Get-AutopilotDevice -id (Get-AutopilotDevice -serial $serial).id -expand
 
-        $CurrentOptions = [PSCustomObject]@{
-            Profile = $Device.deploymentProfile.DisplayName
-            User = $Device.userPrincipalName
-            Name = $Device.displayName
-        }
+        $CurrentOptions = @{ Profile = $Device.deploymentProfile.DisplayName }
+        if ($Options.User) { $CurrentOptions['User'] = $Device.userPrincipalName }
+        if ($Options.Name) { $CurrentOptions['Name'] = $Device.displayName }
 
         if ($CurrentOptions -like $Options) {
             Write-Host "Device with serial '$serial' successfully imported!" -F Green
