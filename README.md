@@ -11,7 +11,7 @@ Inspired by the [Get-WindowsAutoPilotInfo](https://www.powershellgallery.com/pac
 *   **GUI and CLI modes:** Provides an easy-to-use interface for selecting parameters, but also supports full automation via command-line parameters, essential for unattended deployments.
 *   **Intuitive Handling of Existing Devices:** Detects if a device is already registered and allows updating its assigned profile, user, or name without fully re-importing the device
 *   **Waits for Confirmation:** Verifies that the device registration and attribute updates (profile, user, name) are successfully reflected in Intune before exiting.
-*   **Specialize Phase Execution:** Designed to run during the `specialize` phase of Windows Setup (via `autounattend.xml`), ensuring the device is registered with Autopilot *before* the Out-of-Box Experience (OOBE) begins. This can bypass initial OOBE screens like language selection and EULA acceptance.
+*   **Specialize Phase Execution:** Designed to run during the `specialize` phase of Windows Setup (via `autounattend.xml`), ensuring the device is registered with Autopilot *before* the Out-of-Box Experience (OOBE) begins. This can bypass initial OOBE screens like language selection and EULA acceptance. If the selected profile is set to 'self-deploying' mode, Windows will immediately proceed to the enrollment status page allowing for a completely zero-touch experience.
 *   **OOBE Manual Execution:** Can also be run manually during OOBE (Shift+F10) for testing or ad-hoc enrollment.
 
 ## How it Works
