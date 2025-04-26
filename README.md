@@ -14,10 +14,6 @@ Inspired by the [Get-WindowsAutoPilotInfo](https://www.powershellgallery.com/pac
 *   **Specialize Phase Execution:** Designed to run during the `specialize` phase of Windows Setup (via `autounattend.xml`), ensuring the device is registered with Autopilot *before* the Out-of-Box Experience (OOBE) begins. This can bypass initial OOBE screens like language selection and EULA acceptance.
 *   **OOBE Manual Execution:** Can also be run manually during OOBE (Shift+F10) for testing or ad-hoc enrollment.
 
-## Demo
-
-[Watch a demo video](TurboPilot.mp4)
-
 ## How it Works
 
 1.  **Module Loading:** When run during the specialize phase, TurboPilot downloads modules to a temporary folder since the environment variables required for module installation are not yet set. When run on a complete OS, it installs them from PSGallery.
