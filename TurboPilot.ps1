@@ -18,9 +18,9 @@ function Write-HostCenter {
 }
 
 function ShowInfo {
-    Write-HostCenter "TurboPilot - Windows Enrollment Script"
+    Write-HostCenter "# TurboPilot - Windows Enrollment Script #"
     Write-Host "Author: Jacob Raffoul"
-    Write-Host "Version: 1.1.0"
+    Write-Host "Version: 1.1.1"
     Write-Host "License: GPL-3.0" 
 }
 
@@ -140,13 +140,13 @@ function OptionsCLI {
 
     # Validate that the deployment profile exists
     if ($DeploymentProfile) {
-        $Profile = Get-AutopilotProfile | Where-Object displayName -eq $DeploymentProfile | Select-Object -First 1
-        if (-not $Profile) {
+        $SelectedProfile = Get-AutopilotProfile | Where-Object displayName -eq $DeploymentProfile | Select-Object -First 1
+        if (-not $SelectedProfile) {
             Write-Error "Deployment profile '$DeploymentProfile' not found."
             Exit 1
         }
         # Only allow profiles with a group tag
-        $Assignment = Get-AutopilotProfileAssignments -id $Profile.id | Select-Object -First 1
+        $Assignment = Get-AutopilotProfileAssignments -id $SelectedProfile.id | Select-Object -First 1
         $GroupID = $Assignment.id
         if (-not $GroupID) {
             Write-Error "Deployment profile '$DeploymentProfile' has no assignments."
