@@ -7,7 +7,15 @@
     [string]$ComputerName
 )
 
-function Write-HostCenter { param($Message) Write-Host; Write-Host ("{0}{1}" -f (' ' * (([Math]::Max(0, $Host.UI.RawUI.BufferSize.Width / 2) - [Math]::Floor($Message.Length / 2)))), $Message) -f Cyan; Write-Host }
+function Write-HostCenter { 
+    param(
+        $Message
+    )
+
+    Write-Host
+    Write-Host ("{0}{1}" -f (' ' * (([Math]::Max(0, $Host.UI.RawUI.BufferSize.Width / 2) - [Math]::Floor($Message.Length / 2)))), $Message) -f Cyan
+    Write-Host 
+}
 
 function ShowInfo {
     Write-HostCenter "TurboPilot - Windows Enrollment Script"
@@ -22,67 +30,65 @@ function LoadModules{
         [switch]$SetupComplete
     )
 
-    Write-HostCenter 'Loading Modules from Files'
-
-    $Modules = @(
-        @{ Name = 'Microsoft.Graph.Authentication'; Version = '2.26.1' },
+    $ModulesRequired = @(
         @{ Name = 'Microsoft.Graph.Users'; Version = '2.26.1' },
-        @{ Name = 'Microsoft.Graph.Groups'; Version = '2.26.1' },
-        @{ Name = 'Microsoft.Graph.Intune'; Version = '6.1907.1' },
         @{ Name = 'WindowsAutopilotIntune'; Version = '5.7.0' }
     )
-    
+
+    New-Item -ItemType Directory $TempFolder -Force | Out-Null
+
     if ($SetupComplete) {
         Write-HostCenter 'Loading Modules from PSGallery'
-    
+
         if (Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue) { Write-Host "NuGet is already installed!" }
         else { Install-PackageProvider NuGet -Confirm:$false -Force }
     
-        foreach ($Module in $Modules) {
-            if ((Get-Module -ListAvailable -Name $Module.Name).Version -like $Module.Version) {
-                Write-Host "$($Module.Name) is already installed. Importing..."
+        foreach ($Module in $ModulesRequired) {
+            Write-Host -NoNewLine "Loading module: $($Module.Name)"
+            if (Get-Module -ListAvailable -Name $Module.Name) {
                 Import-Module $Module.Name
-            }
+            } 
             else {
-                Write-Host "$($Module.Name) not found! Installing and importing..."
-                Install-Module $Module.Name -RequiredVersion $Module.Version -Confirm:$false -Force | Import-Module
+                Write-Host ' | ' -F White -NoNewline
+                Write-Host 'Installing...' -NoNewline -F Yellow
+                Install-Module $Module.Name -Scope AllUsers -Confirm:$false -Force -WarningAction SilentlyContinue | Import-Module
             }
+            Write-Host ' | ' -F White -NoNewline
+            Write-Host 'Imported!' -F Green
         }
     }
     else {
-        ## Download and extract required modules
-        $Links = $Modules | ForEach-Object {
-            "https://psg-prod-eastus.azureedge.net/packages/$($_.Name.ToLower()).$($_.Version).nupkg"
-        }
-        New-Item -ItemType Directory $TempFolder -Force | Out-Null
-    
-        $ModulesRequired = $Links | ForEach-Object { $_.split('/').trim('.nupkg') | Select-Object -Last 1 }
-        $ModulesPresent = Get-ChildItem $TempFolder | Where-Object { Get-ChildItem $_.FullName -Filter '*.psd1' } | Select-Object -ExpandProperty Name
-    
+        Write-HostCenter 'Loading Modules from Files'
+
+        $ModulesRequired += @(
+            @{ Name = 'Microsoft.Graph.Authentication'; Version = '2.26.1' },
+            @{ Name = 'Microsoft.Graph.Groups'; Version = '2.26.1' },
+            @{ Name = 'Microsoft.Graph.Intune'; Version = '6.1907.1' }
+        )
+        $ModulesRequired = $ModulesRequired | Sort-Object -Property Name | ForEach-Object { ("$($_.Name).$($_.Version)").ToLower() }
         ## Check if modules are already present by comparing the arrays
-        if (!($ModulesPresent)) { $ModulesPresent = @() }
-        if ($ModulesRequired -notlike $ModulesPresent) {
-            Compare-Object $ModulesPresent $ModulesRequired -IncludeEqual | Sort-Object -Property InputObject | ForEach-Object {
-                if ($_.SideIndicator -eq '<=') { continue }
-                $Module = $_.InputObject
-                $Path = "$TempFolder\$Module.zip"
-                $Folder = $Path.Replace('.zip','')
-                Write-Host -NoNewLine "Loading module: $Module"
-                if ($_.SideIndicator -eq '=>') {
-                    $Link = $Links | Where-Object { $_ -like "*$Module*" }
-                    Invoke-WebRequest -Uri $Link -OutFile $Path
-                    Write-Host ' | ' -F White -NoNewline
-                    Write-Host 'Downloaded' -NoNewline -F White
-                    New-Item -ItemType Directory $Folder -Force | Out-Null
-                    Expand-Archive -Path $Path -DestinationPath $Folder -Force
-                    Remove-Item -Path $Path -Force
-                    Write-Host ' | ' -F White -NoNewline
-                    Write-Host 'Extracted' -NoNewline -F Yellow
-                }
-                Import-Module (Get-ChildItem $Folder -Filter '*.psd1' | Select-Object -ExpandProperty FullName)
+        $ModulesPresent = Get-ChildItem $TempFolder | Where-Object { Get-ChildItem $_.FullName -Filter '*.psd1' } | Select-Object -ExpandProperty Name
+        if (-not $ModulesPresent) { $ModulesPresent = @() }
+        ## Download and extract required modules
+        Compare-Object $ModulesPresent $ModulesRequired -IncludeEqual | Sort-Object -Property InputObject | ForEach-Object {
+            if ($_.SideIndicator -eq '<=') { continue }
+            $Module = $_.InputObject
+            $Path = "$TempFolder\$Module.zip"
+            $Folder = $Path.Replace('.zip','')
+            Write-Host -NoNewLine "Loading module: $Module"
+            if ($_.SideIndicator -eq '=>') {
                 Write-Host ' | ' -F White -NoNewline
-                Write-Host 'Imported' -F Green
+                Write-Host 'Downloading...' -NoNewline -F White
+                Invoke-WebRequest -Uri "https://psg-prod-eastus.azureedge.net/packages/$Module.nupkg" -OutFile $Path
+                Write-Host ' | ' -F White -NoNewline
+                Write-Host 'Extracting...' -NoNewline -F Yellow
+                New-Item -ItemType Directory $Folder -Force | Out-Null
+                Expand-Archive -Path $Path -DestinationPath $Folder -Force
+                Remove-Item -Path $Path -Force
             }
+            Import-Module (Get-ChildItem $Folder -Filter '*.psd1' | Select-Object -ExpandProperty FullName)
+            Write-Host ' | ' -F White -NoNewline
+            Write-Host 'Imported!' -F Green
         }
     }
 }
@@ -92,7 +98,7 @@ function ConnectGraph {
         [String]$TenantId,
         [String]$ClientId,
         [String]$ClientSecret,
-        [switch]$SetupComplete
+        [Bool]$SetupComplete
     )
 
     Write-HostCenter "Connecting to Microsoft Graph"
@@ -114,7 +120,10 @@ function ConnectGraph {
     } else {
         ## Connect interactively
         if ($SetupComplete) { Connect-MgGraph -Scopes $Scopes }
-        else { Connect-MgGraph -Scopes $Scopes -UseDeviceCode }
+        else {
+            Write-Error "TenantId, ClientId and ClientSecret are required during the specialize phase of the Windows installation."
+            Exit 1
+        }
     }
 }
 
@@ -137,8 +146,8 @@ function OptionsCLI {
             Exit 1
         }
         # Only allow profiles with a group tag
-        $Assignment = Get-AutopilotProfileAssignments -Id $Profile.Id | Select-Object -First 1
-        $GroupID = $Assignment.Id
+        $Assignment = Get-AutopilotProfileAssignments -id $Profile.id | Select-Object -First 1
+        $GroupID = $Assignment.id
         if (-not $GroupID) {
             Write-Error "Deployment profile '$DeploymentProfile' has no assignments."
             Exit 1
@@ -154,7 +163,7 @@ function OptionsCLI {
 
     # Validate that the user exists
     if ($AssignedUser) {
-        if (!(Get-MgUser -Filter "UserPrincipalName eq '$AssignedUser'" -All | Select-Object -First 1)) {
+        if (-not(Get-MgUser -Filter "UserPrincipalName eq '$AssignedUser'" -All | Select-Object -First 1)) {
             Write-Error "User '$AssignedUser' not found."
             Exit 1
         }
@@ -312,7 +321,7 @@ function OptionsGUI {
     $form.Controls.Add($NameClear)
 
     $NameInput = New-Object System.Windows.Forms.TextBox
-    $NameInput.text = (hostname)
+    $NameInput.text = (Get-AutopilotDevice -serial $serial).displayName
     $NameInput.Location = New-Object System.Drawing.Point(20,($NameLabel.Location.Y+20))
     $NameInput.width = $form.ClientSize.Width-$NameInput.Location.X*2
     $NameInput.Anchor = 'top'
@@ -336,8 +345,8 @@ function OptionsGUI {
     }
 
     $Options = @{ Profile = $ProfileList.SelectedItem }
-    if (!([String]::IsNullOrWhiteSpace($UserInput.Text))) { $Options['User'] = $UserInput.Text }
-    if (!([String]::IsNullOrWhiteSpace($NameInput.Text))) { $Options['Name'] = $NameInput.Text }
+    if (-not([String]::IsNullOrWhiteSpace($UserInput.Text))) { $Options['User'] = $UserInput.Text }
+    if (-not([String]::IsNullOrWhiteSpace($NameInput.Text))) { $Options['Name'] = $NameInput.Text }
 
     Write-Host "Selection: $(ConvertTo-Json $Options -Compress)"
     return $Options
@@ -366,7 +375,7 @@ function ImportDevice {
     if ($Options.Name) { $OldOptions['Name'] = $Device.displayName }
 
     ## Import into Autopilot
-    if (!($Device)) {
+    if (-not $Device) {
         # Flow for new devices
         Write-Host "Importing device with serial '$serial' with GroupTag '$GroupTag'..."
         $hash = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -Class MDM_DevDetail_Ext01 -Filter "InstanceID='Ext' AND ParentID='./DevDetail'"
@@ -425,7 +434,10 @@ function ImportDevice {
         }
 
         $ProfileStatus = $Device.deploymentProfileAssignmentStatus
-        if ($ProfileStatus -eq 'Failed') { Write-Error $Device.deploymentProfileAssignmentDetailedStatus }
+        if ($ProfileStatus -eq 'Failed') { 
+            Write-Error "Profile assignment failed: $($Device.deploymentProfileAssignmentDetailedStatus)"
+            break
+        }
 
         for ($i = 1; $i -le 20; $i++ ) { 
             Write-Progress -Activity "Assigning attributes: $(ConvertTo-Json $Options -Compress)" -Status "Status: $ProfileStatus" -SecondsRemaining (20-$i) 
@@ -444,10 +456,10 @@ function ImportDevice {
 ShowInfo
 $SetupComplete = ((Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State' -Name 'ImageState').ImageState -eq 'IMAGE_STATE_COMPLETE')
 if ($SetupComplete) { $ErrorActionPreference = 'Stop' } else { $ErrorActionPreference = 'Inquire' }
-if ($SetupComplete) { LoadModules } else { LoadModules -TempFolder 'C:\Windows\Temp\TurboPilot' } 
+if ($SetupComplete) { LoadModules -SetupComplete } else { LoadModules -TempFolder 'C:\Windows\Temp\TurboPilot' } 
 ConnectGraph -SetupComplete $SetupComplete -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret
 if ($DeploymentProfile -or $AssignedUser -or $ComputerName) { $Options = OptionsCLI -DeploymentProfile $DeploymentProfile -AssignedUser $AssignedUser -ComputerName $ComputerName }
 else { $Options = OptionsGUI }
 ImportDevice -Options $Options
 Disconnect-MgGraph | Out-Null
-if (!($SetupComplete)) { Start-Sleep -Seconds 5 } # Don't restart immediately
+if (-not $SetupComplete) { Start-Sleep -Seconds 5 } # Don't restart immediately
